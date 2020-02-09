@@ -29,8 +29,8 @@ aws lambda create-function --region eu-west-2 --function-name roznet_status --zi
 ## Update function
 
 ```
-zip -r roznet_status.zip roznet_status.py packages
-aws lambda update-function-code --function-name roznet_status --zip-file fileb://roznet_status.zip 
+zip -q -r zip/roznet_status.zip roznet_status.py packages
+aws lambda update-function-code --function-name roznet_status --zip-file fileb://zip/roznet_status.zip --profile roznet_lambda_user
 ```
 
 ## Update Environment variables
@@ -50,6 +50,12 @@ aws lambda list-functions --profile roznet_lambda_user
 ```
 aws lambda invoke --function-name quotes-lambda-function --log-type Tail --payload '{"a":1}' outputfile.txt
 aws lambda invoke --invocation-type RequestResponse --function-name roznet_status --log-type Tail --payload '{"a":1}' --profile roznet_lambda_user statusout.txt
+```
+
+## Database
+
+```
+aws rds create-db-instance --db-name garmindev --engine MySQL --db-instance-identifier garmindev --backup-retention-period 3 --db-instance-class db.t2.micro --allocated-storage 5 --no-publicly-accessible --master-username roznet_dbuser --master-user-password XXX
 ```
 
 ## Setup packages
