@@ -2,3 +2,4 @@ __pycache__
 packages
 out
 zip
+config.json
