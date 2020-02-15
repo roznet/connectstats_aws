@@ -63,5 +63,5 @@ aws rds create-db-instance --db-name garmindev --engine MySQL --db-instance-iden
 ```
 pip3 install --target packages urllib3
 pip3 freeze --path packages > requirements.txt
-pip3 -r requirements.txt install --target packages
+pip3 install -r requirements.txt --target packages
 ```
