@@ -6,9 +6,14 @@ aws_cmd=aws
 case $command in
 		create)
 				name=${2?:"function name not specified"}
-				role_arn=`jq -j '.lambda_role' config.json`
+				aws iam list-roles > out/roles.json
+				role_arn=`jq -j '.Roles[] | select ( .RoleName == "roznet_lambda_vpc_role") | .Arn' out/roles.json`
+				source_function=garmin_push_activities
+				aws lambda get-function-configuration --function-name ${source_function} > out/${source_function}_config.json
+				jq -c '.VpcConfig | del(.VpcId)' out/${source_function}_config.json > out/${name}_vpc_config.json
+				rm -f connectstats/*~
 				zip -q -r zip/${name}.zip ${name}.py packages connectstats config.json
-				$aws_cmd lambda create-function --region eu-west-2 --function-name ${name} --zip-file fileb://zip/${name}.zip --role "${role_arn}" --handler ${name}.handler --runtime python3.8 --profile roznet_lambda_user
+				$aws_cmd lambda create-function --region eu-west-2 --function-name ${name} --zip-file fileb://zip/${name}.zip --role "${role_arn}" --handler ${name}.handler --runtime python3.8 --vpc-config file://out/${name}_vpc_config.json
 				;;
 		update)
 				name=${2?:"function name not specified"}
