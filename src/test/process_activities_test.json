@@ -1,0 +1,20 @@
+{
+    "Records": [
+        {
+            "messageId": "6e12c7b3-b670-4cf9-a24f-7289c5f8d91e",
+            "receiptHandle": "AQEByWPeVIcl1LORIZKeQ7+F2izPQnXa1CJdJKinsefJ07Mr/LxYNo7TwE7BynEKv4v7jDVuC6+/HjbahQQQ85PFFRcnnb6LeFLJhsd6gMnmQDacxlXkF7Fj27jQVLB0BGnUfVI8KlZAxBWw5v9uZjy35mn/Mz9Tjq5u8TA1Ii34jzK/qGGj1po9Bcud9fSTKZk/NxHBlvf6Kzy25t9Sfvcbw483/G62wGK6hB9Zd+zFdpwqOBT3v4OSpprC3n4UJZYGXM1YWaKdw6Kes9P7v5WmCSBGNJVvhpPAarRRkZTbemmCNpwglCnEPiE05twmGlbyE8Q/GSXs6/8Dt2ToO/0tbfmcLKfFxckBDzyE60r6p8Qqv1+3Zluq4iUHN5fIq/WzBksbmLYGyc5sV97HnDRK4g==",
+            "body": "{\"cache_id\": 49, \"table\": \"cache_activities\"}",
+            "attributes": {
+                "ApproximateReceiveCount": "1",
+                "SentTimestamp": "1581857326543",
+                "SenderId": "AIDA6DYAIJ62563MK4YQO",
+                "ApproximateFirstReceiveTimestamp": "1581857326547"
+            },
+            "messageAttributes": {},
+            "md5OfBody": "7fdb0999fe1477c29f78c13c65517018",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:eu-west-2:970126282677:connectstats",
+            "awsRegion": "eu-west-2"
+        }
+    ]
+}

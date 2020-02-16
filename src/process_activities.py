@@ -7,7 +7,7 @@ import os
 def handler(event, context):
     api = garminapi.api()
 
-    api.process_activities(event,context)
+    api.process_cache(event,context)
 
     
 

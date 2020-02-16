@@ -3,9 +3,11 @@
 command=${1?:"Command not specified"}
 aws_cmd=aws
 
+name=${2?:"function name not specified"}
+name=${name:r}
+
 case $command in
 		create)
-				name=${2?:"function name not specified"}
 				aws iam list-roles > out/roles.json
 				role_arn=`jq -j '.Roles[] | select ( .RoleName == "roznet_lambda_vpc_role") | .Arn' out/roles.json`
 				source_function=garmin_push_activities
@@ -16,12 +18,10 @@ case $command in
 				$aws_cmd lambda create-function --region eu-west-2 --function-name ${name} --zip-file fileb://zip/${name}.zip --role "${role_arn}" --handler ${name}.handler --runtime python3.8 --vpc-config file://out/${name}_vpc_config.json
 				;;
 		update)
-				name=${2?:"function name not specified"}
 				zip -q -r zip/${name}.zip ${name}.py packages connectstats config.json
 				$aws_cmd lambda update-function-code --region eu-west-2 --function-name ${name} --zip-file fileb://zip/${name}.zip --profile roznet_lambda_user
 				;;
 		test)
-				name=${2?:"function name not specified"}
 				testname=test/${name}_test.py
 				testinput=test/${name}_test.json
 				echo 'import json' > $testname
@@ -43,7 +43,6 @@ case $command in
 						$aws_cmd apigateway create-rest-api --name connectstats > out/connectstats_api.json
 						api_id=`jq -j '.id' out/connectstats_api.json`
 				fi
-				name=${2?:"function name not specified"}
 				aws apigateway get-resources --rest-api-id $api_id > out/connectstats_resources.json
 				parent_id=`jq -j '.items[] | select( .path == "/") | .id' out/connectstats_resources.json`
 				if [ -z "$parent_id" ]; then
