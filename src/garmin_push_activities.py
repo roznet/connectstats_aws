@@ -9,5 +9,13 @@ def handler(event, context):
 
     api.save_to_cache('cache_activities', event )
 
-    
+    result = {
+        'statusCode' : 200,
+        'headers' : {
+            'Content-Type' : 'application/json'
+        }
+        #'body'
+    }
+
+    return result
 

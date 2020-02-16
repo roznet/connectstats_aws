@@ -65,3 +65,7 @@ pip3 install --target packages urllib3
 pip3 freeze --path packages > requirements.txt
 pip3 install -r requirements.txt --target packages
 ```
+
+## Online Info
+
+[setup vpc for sqs](https://www.lisenet.com/2016/configure-aws-nat-gateway-for-lambda-functions-to-access-public-sqs-queues-from-vpc/)

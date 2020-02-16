@@ -20,6 +20,21 @@ case $command in
 				zip -q -r zip/${name}.zip ${name}.py packages connectstats config.json
 				$aws_cmd lambda update-function-code --region eu-west-2 --function-name ${name} --zip-file fileb://zip/${name}.zip --profile roznet_lambda_user
 				;;
+		test)
+				name=${2?:"function name not specified"}
+				testname=test/${name}_test.py
+				testinput=test/${name}_test.json
+				echo 'import json' > $testname
+				echo "import ${name}" >> $testname
+				if [ -f ${testinput} ]; then
+						echo "with open( '${testinput}', 'r' ) as f:" >> $testname
+						echo "  event=json.load(f)" >> $testname
+				else
+						echo "event={}" >> $testname
+				fi
+				echo "${name}.handler(event,{})" >> $testname
+				cat $testname | python3 
+				;;
 		createapi)
 				aws apigateway get-rest-apis > out/rest_apis.json
 				api_id=`jq -j '.items[] | select(.name=="connectstats") | .id' out/rest_apis.json`
