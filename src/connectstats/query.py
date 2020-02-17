@@ -24,48 +24,30 @@ class query:
         fullconfig = json.load( configfile )
         self.config = fullconfig['test']
         logging.info( 'connecting to {} as {}'.format(self.config['db_host'], self.config['db_username']))
+        
+        self.db = pymysql.connect( self.config['db_host'], user=self.config['db_username'], passwd=self.config['db_password'],db=self.config['database'], connect_timeout=5,cursorclass=pymysql.cursors.DictCursor)
 
         regexp = re.compile("'([a-zA-Z_]+)' +=> +'([-.0-9a-zA-Z_!]+)'," )
         config = dict()
 
-        with open( args.config ) as cf:
-            for line in cf:
-                m = regexp.search( line )
-                if m:
-                    config[ m.group(1) ] = m.group(2)
+        self.consumerKey = self.config['consumerKey']
+        self.consumerSecret = self.config['consumerSecret']
 
-        self.consumerKey = config['consumerKey']
-        self.consumerSecret = config['consumerSecret']
+        if 'serviceKey' in self.config and 'serviceKeySecret' in config:
+            self.serviceKey = self.config['serviceKey']
+            self.serviceKeySecret = self.config['serviceKeySecret']
 
-        if 'serviceKey' in config and 'serviceKeySecret' in config:
-            self.serviceKey = config['serviceKey']
-            self.serviceKeySecret = config['serviceKeySecret']
+        self.verbose = True
 
-        self.db = mysql.connector.connect(
-            host=config['db_host'],
-            user=config['db_username'],
-            passwd=config['db_password'],
-            database=config['database']
-            )
-
-        if args.token != 0:
-            self.setup_token_id( args.token )
-        else:
-            self.userAccessToken = None
-            self.userAccessTokenSecret = None
-
-        # close db connection, or could lock for the url call
-        self.db.close()
-            
         
     def setup_token_id(self,token_id ):
-        cursor = self.db.cursor()
-        cursor.execute( 'SELECT userAccessToken,userAccessTokenSecret FROM tokens WHERE token_id = %s', (token_id, ) )
+        with self.db.cursor() as cursor:
+            cursor.execute( 'SELECT userAccessToken,userAccessTokenSecret FROM tokens WHERE token_id = %s', (token_id, ) )
 
-        row = cursor.fetchone()
+            row = cursor.fetchone()
         
-        self.userAccessToken = row[0]
-        self.userAccessTokenSecret = row[1]
+        self.userAccessToken = row['userAccessToken']
+        self.userAccessTokenSecret = row['userAccessTokenSecret']
 
         
     def id_generator(self, size=6, chars=string.ascii_uppercase + string.digits):
@@ -89,16 +71,11 @@ class query:
         oauthmethod = "HMAC-SHA1"
         oauthver = "1.0"
 
-        if self.args.system:
-            userAccessToken = self.serviceKey
-            userAccessTokenSecret = self.serviceKeySecret
-            if self.verbose:
-                print( '> System Call Authentication: {}'.format( self.serviceKey ) )
-        else:
-            userAccessToken = self.userAccessToken
-            userAccessTokenSecret = self.userAccessTokenSecret
-            if self.verbose:
-                print( '> User Authentication: {}'.format( self.userAccessToken ) )
+        userAccessToken = self.userAccessToken
+        userAccessTokenSecret = self.userAccessTokenSecret
+        
+        if self.verbose:
+            print( '> User Authentication: {}'.format( self.userAccessToken ) )
 
         oauth_params ={"oauth_consumer_key":self.consumerKey,
                        "oauth_token" :userAccessToken,
