@@ -1,5 +1,7 @@
 from packages import urllib3
 from packages import pymysql
+from connectstats import res
+from connectstats import query
 import json
 import time
 import os
@@ -9,64 +11,40 @@ import logging
 logging.getLogger().setLevel(logging.INFO)
 
 class api:
-    def __init__(self):
-        configfile = open( 'config.json', 'r' )
-        fullconfig = json.load( configfile )
-        self.config = fullconfig['test']
-        logging.info( 'connecting to {} as {}'.format(self.config['db_host'], self.config['db_username']))
-        self.db = pymysql.connect( self.config['db_host'], user=self.config['db_username'], passwd=self.config['db_password'],db=self.config['database'], connect_timeout=5,cursorclass=pymysql.cursors.DictCursor)
-
+    def __init__(self,stage='local'):
+        self.res = res.resmgr(stage)
         self.userAccessTokenToUser = {}
 
-    def trigger_queue(self,table,lastid):
+        
+    def send_message_to_queue(self,message):
         """Will trigger a queue event with the cache_id and table info"""
-        
-        url = self.config['sqs_queue_url']
-        logging.info( 'sending {}:{} to {}'.format( table, lastid, url ) )
-        
-        sqs = boto3.resource('sqs')
-        if sqs:
-            logging.info( 'got sqs {}'.format( sqs ) )
-            # Get the queue
-            queue = sqs.Queue(url)
-            
-            if queue:
-                logging.info( 'received queue {}'.format( queue ) )
 
-                data={'cache_id' : lastid, 'table' : table }
+        self.res.send_message(message)
 
-                response = queue.send_message(
-                    MessageBody=json.dumps( data )
-                )
-                if response:
-                    logging.info('message sent {}'.format(response.get('MessageId')))
-                else:
-                    logging.error('Could not send message')
-                    
-            else:
-                logging.error( 'Could not get queue {}'.format( url ) )
-        else:
-            logging.error( 'Could not get sqs resource' )
-
-        
-    def save_to_cache(self,table,event):
-        if( 'payload' in event and 'body' in event['payload'] ):
-            query = 'INSERT INTO {} (`started_ts`,`json`) VALUES(FROM_UNIXTIME({}),%s)'.format( table, time.time() )
-            logging.info( 'query {}'.format( query ) )
-            with self.db.cursor() as cur:
-                cur.execute( query, (event['payload']['body'], ) )
-                lastid = cur.lastrowid
-        else:
-            query = 'INSERT INTO {} (`started_ts`,`json`) VALUES(FROM_UNIXTIME({}),%s)'.format( table, time.time() )
-            logging.info( 'query {}'.format( query ) )
-            with self.db.cursor() as cur:
-                cur.execute( query, (json.dumps( event ), ) )
-                lastid = cur.lastrowid
                 
-        self.db.commit()
+    def save_to_cache(self,table,event):
+        if 'body' in event:
+            body = event['body']
+            query = 'INSERT INTO {} (`started_ts`,`json`) VALUES(FROM_UNIXTIME({}),%s)'.format( table, time.time() )
+            logging.info( 'query {}'.format( query ) )
+            with self.res.cursor() as cur:
+                cur.execute( query, (body, ) )
+                lastid = cur.lastrowid
+        else:
+            logging.error('malformed event {}'.format(event))
+            return 400
+            
+        self.res.commit()
         
-        if 'activities' in event or 'activityFiles' in event or 'manuallyUpdatedActivities' in event:
-            self.trigger_queue(table, lastid )
+        if 'activities' in body or 'activityFiles' in body or 'manuallyUpdatedActivities' in body:
+            message = { 'command':'process_push_or_ping',
+                       'args':{'cache_id' : lastid, 'table' : table },
+                       'stage':self.res.stage
+                       }
+
+            self.send_message_to_queue( message )
+
+        return 200
 
     def dict_to_sql_insert(self,table,data):
         columns = ['`{}`'.format( x ) for x in data.keys()]
@@ -83,7 +61,7 @@ class api:
         previous = None
         if len(keys)>0:
             where = ' AND '.join( '`{}` = {}'.format( x, data[x] ) for x in keys )
-            with self.db.cursor() as cur:
+            with self.res.cursor() as cur:
                 sql = 'SELECT {} FROM {} WHERE {}'.format( key if key else keys[0], table, where )
                 cur.execute( sql )
                 previous = cur.fetchone()
@@ -111,24 +89,28 @@ class api:
             else:
                 data[key] = val
 
+        isping = 'callbackURL' in row
+        
         user = self.garmin_user_for_accessToken( row['userAccessToken'] )
         if user and 'cs_user_id' in user:
             row['cs_user_id'] = user['cs_user_id']
-        row['json'] = json.dumps( data )
+            
         sql,key_val = self.sql_insert_or_update( table, row, ['summaryId','startTimeInSeconds'], key=table_key )
         new_row = key_val is None
-        with self.db.cursor() as cur:
+        with self.res.cursor() as cur:
             cur.execute( sql, row )
             if not key_val:
                 key_val = cur.lastrowid
-        del row['json']
-        row['activity_id'] = key_val
+        if 'json' in row:
+            del row['json']
+            
+        row[table_key] = key_val
         if new_row:
             logging.info( 'inserted {}={}'.format( table_key, key_val) )
         else:
             logging.info( 'updated {}={}'.format( table_key, key_val ) )
         logging.info( row )
-        self.db.commit()
+        self.res.commit()
 
         return row
 
@@ -137,30 +119,76 @@ class api:
             userInfo = self.userAccessTokenToUser[accessToken]
         else:
             query = 'SELECT `cs_user_id`,`userId` FROM `tokens` WHERE `userAccessToken` = %s'
-            with self.db.cursor() as cur:
+            with self.res.cursor() as cur:
                 cur.execute( query, accessToken )
                 userInfo = cur.fetchone()
             self.userAccessTokenToUser[accessToken] = userInfo
             
         return userInfo
 
-    
-    def process_cache_one(self,info):
-        cache_id = info['cache_id']
-        cachetable = info['table']
+    def setup_token_id(self,token_id ):
+        with self.res.cursor() as cursor:
+            cursor.execute( 'SELECT userAccessToken,userAccessTokenSecret FROM tokens WHERE token_id = %s', (token_id, ) )
 
-        table = 'activities'
-        table_key = 'activity_id'
+            row = cursor.fetchone()
+        
+        self.userAccessToken = row['userAccessToken']
+        self.userAccessTokenSecret = row['userAccessTokenSecret']
+        
+    def setup_access_token(self,access_token ):
+        with self.res.cursor() as cursor:
+            cursor.execute( "SELECT userAccessToken,userAccessTokenSecret FROM `tokens` WHERE userAccessToken = %s", (access_token, ) )
+
+            row = cursor.fetchone()
+        
+        self.userAccessToken = row['userAccessToken']
+        self.userAccessTokenSecret = row['userAccessTokenSecret']
+
+    def process_callback_url(self,body):
+        args = body['args']
+        file_id = args['file_id']
+        table = args['table']
+
+        with self.res.cursor() as cursor:
+            cursor.execute( "SELECT * FROM {} WHERE file_id = {}".format( table, file_id ) )
+            row = cursor.fetchone()
+        print( row )
+        q = query.query(self.res.config)
+        self.setup_access_token( row['userAccessToken'] )
+
+        q.setup_tokens(self.userAccessToken,self.userAccessTokenSecret)
+        filecontent = q.query_url( row['callbackURL'] )
+
+        filename = 'users/{userId}/assets/{fileType}/{file_id}'.format(**row)
+        s3 = boto3.resource('s3')
+        object = s3.Object('connectstats.ro-z.net', filename)
+        object.put(Body=filecontent)
+        logging.info('saved {}'.format(filename))
+        
+    
+    def process_push_or_ping(self,body):
+        args = body['args']
+        cache_id = args['cache_id']
+        cachetable = args['table']
+
+        if cachetable == 'cache_activities':
+            table = 'activities'
+            tag = 'activities'
+            table_key = 'activity_id'
+        elif cachetable == 'cache_fitfiles':
+            table = 'fitfiles'
+            tag = 'activityFiles'
+            table_key = 'file_id'
+        else:
+            return
         
         query = 'SELECT `json` FROM {} WHERE cache_id = {}'.format( cachetable, cache_id )
         logging.info( query )
-        with self.db.cursor() as cur:
+        with self.res.cursor() as cur:
             cur.execute( query )
             payload = cur.fetchone()
 
         payload = json.loads( payload['json'] )
-
-        tag = 'activities'
 
         if tag in payload:
             items = payload[tag]
@@ -171,21 +199,33 @@ class api:
                 # update cache map
                 mapdata = {'cache_id':cache_id,table_key:row[table_key]}
                 sql = self.sql_insert_or_update( '{}_map'.format( cachetable ), mapdata , [table_key])
-                with self.db.cursor() as cur:
+                with self.res.cursor() as cur:
                     cur.execute( sql, mapdata )
-                self.db.commit()
+                self.res.commit()
 
-            
-    def process_cache(self,event,context):
-        """
-        
-        """
+            messages = []
+            for row in rows:
+                if 'file_id' in row and 'callbackURL' in row:
+                    message =  { 'command':'process_callback_url',
+                                    'args':{'file_id' : row['file_id'], 'table' : 'fitfiles' },
+                                    'stage':self.res.stage
+                    }
+                    self.res.send_message(message)
+
+    def process_queue_message(self,event,context):
         if 'Records' in event:
             records = event['Records']
             logging.info( 'Processing {} events'.format( len( records ) ) )
             for record in records:
                 if 'body' in record and 'messageId' in record:
-                    logging.info( 'Processing messageId {}'.format( record['messageId'] ) )
                     body = json.loads( record['body'] )
-                    logging.info( body )
-                    self.process_cache_one( body )
+                    if 'command' in body:
+                        logging.info( 'Processing messageId {}'.format( record['messageId'] ) )
+                        if 'stage' in body:
+                            self.res.change_stage( body['stage'] )
+                        if body['command'] == 'process_push_or_ping':
+                            self.process_push_or_ping( body )
+                        elif body['command'] == 'process_callback_url':
+                            self.process_callback_url( body )
+                        else:
+                            logging.error('Unkonwn Commmand {}'.format(body))

@@ -22,14 +22,17 @@ case $command in
 				$aws_cmd lambda update-function-code --region eu-west-2 --function-name ${name} --zip-file fileb://zip/${name}.zip --profile roznet_lambda_user
 				;;
 		test)
+				testsuffix=${3:-"test"}
 				testname=test/${name}_test.py
-				testinput=test/${name}_test.json
+				testinput=test/${name}_${testsuffix}.json
 				echo 'import json' > $testname
 				echo "import ${name}" >> $testname
 				if [ -f ${testinput} ]; then
+						echo "test input file: $testinput"
 						echo "with open( '${testinput}', 'r' ) as f:" >> $testname
 						echo "  event=json.load(f)" >> $testname
 				else
+						echo "no test input file: ${testinput}"
 						echo "event={}" >> $testname
 				fi
 				echo "${name}.handler(event,{})" >> $testname

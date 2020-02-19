@@ -8,8 +8,9 @@ import random
 import hashlib
 import hmac
 import re
+import urllib3
+import urllib.parse
 
-from packages import urllib3
 from packages import pymysql
 
 import base64
@@ -19,35 +20,17 @@ logging.getLogger().setLevel(logging.INFO)
 
 class query:
 
-    def __init__(self):
-        configfile = open( 'config.json', 'r' )
-        fullconfig = json.load( configfile )
-        self.config = fullconfig['test']
-        logging.info( 'connecting to {} as {}'.format(self.config['db_host'], self.config['db_username']))
+    def __init__(self,config):
+        self.config = config
         
-        self.db = pymysql.connect( self.config['db_host'], user=self.config['db_username'], passwd=self.config['db_password'],db=self.config['database'], connect_timeout=5,cursorclass=pymysql.cursors.DictCursor)
-
-        regexp = re.compile("'([a-zA-Z_]+)' +=> +'([-.0-9a-zA-Z_!]+)'," )
-        config = dict()
-
         self.consumerKey = self.config['consumerKey']
         self.consumerSecret = self.config['consumerSecret']
 
-        if 'serviceKey' in self.config and 'serviceKeySecret' in config:
-            self.serviceKey = self.config['serviceKey']
-            self.serviceKeySecret = self.config['serviceKeySecret']
-
         self.verbose = True
 
-        
-    def setup_token_id(self,token_id ):
-        with self.db.cursor() as cursor:
-            cursor.execute( 'SELECT userAccessToken,userAccessTokenSecret FROM tokens WHERE token_id = %s', (token_id, ) )
-
-            row = cursor.fetchone()
-        
-        self.userAccessToken = row['userAccessToken']
-        self.userAccessTokenSecret = row['userAccessTokenSecret']
+    def setup_tokens(self,userAccessToken,userAccessTokenSecret):
+        self.userAccessToken = userAccessToken
+        self.userAccessTokenSecret = userAccessTokenSecret
 
         
     def id_generator(self, size=6, chars=string.ascii_uppercase + string.digits):
@@ -125,30 +108,6 @@ class query:
             
         return( contents )
         
-
-
-
-if __name__ == "__main__":
-    
-    parser = argparse.ArgumentParser( description='Query ConnectStats API', formatter_class=argparse.RawTextHelpFormatter )
-    parser.add_argument( 'url' )
-    parser.add_argument( '-c', '--config', help='config.php file to use to extract information', default = '../api/config.php' )
-    parser.add_argument( '-t', '--token', help='Token id for the access Token Secret (0=no authentification)', default = 0 )
-    parser.add_argument( '-o', '--outfile', help='file to save output' )
-    parser.add_argument( '-v', '--verbose', help='verbose output', action='store_true' )
-    parser.add_argument( '-s', '--system', help='Authenticate as a system call', action='store_true' )
-    args = parser.parse_args()
-    
-    req = ConnectStatsRequest(args)
-    
-    content = req.query_url( args.url )
-    if args.outfile:
-        with open( args.outfile, 'wb' ) as of:
-            of.write( content )
-            if req.verbose:
-                print( '> Saved {}'.format( args.outfile ) )
-    else:
-        print( content.decode('utf-8' ) )
         
              
 
