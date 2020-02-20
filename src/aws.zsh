@@ -24,7 +24,11 @@ case $command in
 		test)
 				testsuffix=${3:-"test"}
 				testname=test/${name}_test.py
-				testinput=test/${name}_${testsuffix}.json
+				if [ -f ${testsuffix} ]; then
+						testinput=${testsuffix}
+				else
+						testinput=test/${name}_${testsuffix}.json
+				fi
 				echo 'import json' > $testname
 				echo "import ${name}" >> $testname
 				if [ -f ${testinput} ]; then

@@ -89,8 +89,13 @@ class api:
             else:
                 data[key] = val
 
-        isping = 'callbackURL' in row
-        
+        if 'callbackURL' in row:
+            
+            isping = True
+        else:
+            isping = False
+            row['json'] = json.dumps( data )
+            
         user = self.garmin_user_for_accessToken( row['userAccessToken'] )
         if user and 'cs_user_id' in user:
             row['cs_user_id'] = user['cs_user_id']
@@ -106,9 +111,9 @@ class api:
             
         row[table_key] = key_val
         if new_row:
-            logging.info( 'inserted {}={}'.format( table_key, key_val) )
+            logging.info( f'inserted {table_key}={key_val}' )
         else:
-            logging.info( 'updated {}={}'.format( table_key, key_val ) )
+            logging.info( f'updated {table_key}={key_val}' )
         logging.info( row )
         self.res.commit()
 
@@ -136,11 +141,12 @@ class api:
         self.userAccessTokenSecret = row['userAccessTokenSecret']
         
     def setup_access_token(self,access_token ):
+
         with self.res.cursor() as cursor:
             cursor.execute( "SELECT userAccessToken,userAccessTokenSecret FROM `tokens` WHERE userAccessToken = %s", (access_token, ) )
 
             row = cursor.fetchone()
-        
+            
         self.userAccessToken = row['userAccessToken']
         self.userAccessTokenSecret = row['userAccessTokenSecret']
 
@@ -159,12 +165,10 @@ class api:
         q.setup_tokens(self.userAccessToken,self.userAccessTokenSecret)
         filecontent = q.query_url( row['callbackURL'] )
 
-        filename = 'users/{userId}/assets/{fileType}/{file_id}'.format(**row)
-        s3 = boto3.resource('s3')
-        object = s3.Object('connectstats.ro-z.net', filename)
-        object.put(Body=filecontent)
-        logging.info('saved {}'.format(filename))
-        
+        userId = row['userId']
+        fileType = row['fileType'].lower()
+        filename = f'users/{userId}/assets/{fileType}/{file_id}.{fileType}'
+        self.res.save_file(filename,filecontent)
     
     def process_push_or_ping(self,body):
         args = body['args']

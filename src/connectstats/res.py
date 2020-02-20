@@ -49,8 +49,8 @@ class resmgr:
                         logging.info( 'Connected sqs[{}] {}'.format( stage, sqs ) )
                         # Get the queue
                         self.queues[self.stage] = sqs.Queue(url)
-            elif 'file_queue_path' in self.config:
-                self.queues[self.stage] = filequeue.filequeue(self.config['file_queue_path'])
+            elif 'sqs_local_path' in self.config:
+                self.queues[self.stage] = filequeue.filequeue(self.config['sqs_local_path'])
                     
         return self.queues[self.stage]
 
@@ -65,3 +65,21 @@ class resmgr:
         else:
             logging.error('Could not send message')
         return response
+
+    def save_file(self,filename,file_content):
+        if 's3_bucket' in self.config:
+            s3 = boto3.resource('s3')
+            bucket = self.config['s3_bucket']
+            object = s3.Object(bucket, filename)
+            object.put(Body=filecontent)
+            logging.info('saved to s3 bucket {}:{}'.format(bucket,filename))
+        elif 's3_local_path' in self.config:
+            destpath = self.config['s3_local_path']
+            destpath = os.path.join( destpath, os.path.dirname( filename ) )
+            os.makedirs( destpath, exist_ok = True )
+            destfile = os.path.join( destpath, os.path.basename( filename ))
+            with open( destfile, 'wb' ) as of:
+                of.write( file_content )
+            logging.info('saved to local file {}'.format(destfile))
+        else:
+            logging.error('No config to save file')
