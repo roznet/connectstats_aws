@@ -37,10 +37,10 @@ class api:
         self.res.commit()
         
         if 'activities' in body or 'activityFiles' in body or 'manuallyUpdatedActivities' in body:
-            message = { 'command':'process_push_or_ping',
-                       'args':{'cache_id' : lastid, 'table' : table },
-                       'stage':self.res.stage
-                       }
+            message = { 'queue_task':'queue_task_push_or_ping',
+                        'args':{'cache_id' : lastid, 'table' : table },
+                        'stage':self.res.stage
+            }
 
             self.send_message_to_queue( message )
 
@@ -77,7 +77,7 @@ class api:
         return sql
             
             
-    def process_garmin_item(self,item,table,table_key):
+    def garmin_process_push_or_ping_item(self,item,table,table_key):
         extract_fields = ['summaryId', 'startTimeInSeconds', 'callbackURL', 'fileType', 'userId', 'userAccessToken']
 
         data = {}
@@ -150,7 +150,7 @@ class api:
         self.userAccessToken = row['userAccessToken']
         self.userAccessTokenSecret = row['userAccessTokenSecret']
 
-    def process_callback_url(self,body):
+    def queue_task_callback_url(self,body):
         args = body['args']
         file_id = args['file_id']
         table = args['table']
@@ -170,7 +170,7 @@ class api:
         filename = f'users/{userId}/assets/{fileType}/{file_id}.{fileType}'
         self.res.save_file(filename,filecontent)
     
-    def process_push_or_ping(self,body):
+    def queue_task_push_or_ping(self,body):
         args = body['args']
         cache_id = args['cache_id']
         cachetable = args['table']
@@ -198,7 +198,7 @@ class api:
             items = payload[tag]
             rows = []
             for item in items:
-                row = self.process_garmin_item(item,table,table_key)
+                row = self.garmin_process_push_or_ping_item(item,table,table_key)
                 rows += [ row ]
                 # update cache map
                 mapdata = {'cache_id':cache_id,table_key:row[table_key]}
@@ -207,12 +207,17 @@ class api:
                     cur.execute( sql, mapdata )
                 self.res.commit()
 
+                sql = f'UPDATE {cachetable} SET processed_ts = FROM_UNIXTIME({time.time()}) WHERE cache_id = {cache_id}'
+                with self.res.cursor() as cur:
+                    cur.execute( sql )
+                self.res.commit()
+
             messages = []
             for row in rows:
                 if 'file_id' in row and 'callbackURL' in row:
-                    message =  { 'command':'process_callback_url',
-                                    'args':{'file_id' : row['file_id'], 'table' : 'fitfiles' },
-                                    'stage':self.res.stage
+                    message =  { 'queue_task':'queue_task_callback_url',
+                                 'args':{'file_id' : row['file_id'], 'table' : 'fitfiles' },
+                                 'stage':self.res.stage
                     }
                     self.res.send_message(message)
 
@@ -223,13 +228,14 @@ class api:
             for record in records:
                 if 'body' in record and 'messageId' in record:
                     body = json.loads( record['body'] )
-                    if 'command' in body:
+                    if 'queue_task' in body:
                         logging.info( 'Processing messageId {}'.format( record['messageId'] ) )
                         if 'stage' in body:
                             self.res.change_stage( body['stage'] )
-                        if body['command'] == 'process_push_or_ping':
-                            self.process_push_or_ping( body )
-                        elif body['command'] == 'process_callback_url':
-                            self.process_callback_url( body )
+
+                        task = body['queue_task']
+
+                        if task.startswith('queue_task_') and hasattr(self, task):
+                            getattr(self,task)( body )
                         else:
                             logging.error('Unkonwn Commmand {}'.format(body))
