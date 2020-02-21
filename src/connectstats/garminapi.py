@@ -1,6 +1,6 @@
 from packages import urllib3
 from packages import pymysql
-from connectstats import res
+from connectstats import resources
 from connectstats import query
 import json
 import time
@@ -12,7 +12,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 class api:
     def __init__(self,stage='local'):
-        self.res = res.resmgr(stage)
+        self.res = resources.resources_manager(stage)
         self.userAccessTokenToUser = {}
 
         
@@ -21,8 +21,16 @@ class api:
 
         self.res.send_message(message)
 
+    def rest_empty_response(self,statusCode):
+        return {
+            'statusCode' : statusCode,
+            'headers' : {
+                'Content-Type' : 'application/json'
+            },
+            'body' : ''
+        }
                 
-    def save_to_cache(self,table,event):
+    def save_to_cache(self,event,table):
         if 'body' in event:
             body = event['body']
             query = 'INSERT INTO {} (`started_ts`,`json`) VALUES(FROM_UNIXTIME({}),%s)'.format( table, time.time() )
@@ -32,7 +40,7 @@ class api:
                 lastid = cur.lastrowid
         else:
             logging.error('malformed event {}'.format(event))
-            return 400
+            return self.rest_empty_response(400)
             
         self.res.commit()
         
@@ -44,7 +52,7 @@ class api:
 
             self.send_message_to_queue( message )
 
-        return 200
+        return self.rest_empty_response(200)
 
     def dict_to_sql_insert(self,table,data):
         columns = ['`{}`'.format( x ) for x in data.keys()]
@@ -132,6 +140,10 @@ class api:
         return userInfo
 
     def setup_token_id(self,token_id ):
+        '''
+        Setup token secret for api call for a given token_id
+        '''
+        
         with self.res.cursor() as cursor:
             cursor.execute( 'SELECT userAccessToken,userAccessTokenSecret FROM tokens WHERE token_id = %s', (token_id, ) )
 
@@ -141,7 +153,9 @@ class api:
         self.userAccessTokenSecret = row['userAccessTokenSecret']
         
     def setup_access_token(self,access_token ):
-
+        '''
+        Setup token secret for api call matching a userAccessToken
+        '''
         with self.res.cursor() as cursor:
             cursor.execute( "SELECT userAccessToken,userAccessTokenSecret FROM `tokens` WHERE userAccessToken = %s", (access_token, ) )
 

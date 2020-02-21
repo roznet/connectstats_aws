@@ -6,39 +6,38 @@ import logging
 
 logging.getLogger().setLevel(logging.INFO)
 
-
 def handler(event, context):
     statusCode = 200
-
+    response = {}
+    
     try:
         path = event['pathParameters']['proxy']
         stage = event['requestContext']['stage']
     except Exception as e:
         statusCode = 400
-        
 
     if statusCode == 200:
         api = garminapi.api(stage)
         
         if path == 'push/activities':
-            table = 'cache_activities'
+            args = 'cache_activities'
+            task = 'save_to_cache'
         elif path == 'push/files':
-            table = 'cache_fitfiles'
-        if table:
-            statusCode = api.save_to_cache(table, event )
+            args = 'cache_fitfiles'
+            task = 'save_to_cache'
         else:
-            statusCode = 400
+            args = None
+            task = None
+        if task and hasattr(api, task):
+            response = getattr(api,task)(event, args )
+        else:
+            response = {'statusCode':400}
 
-    if statusCode != 200:
+    if 'statusCode' not in response:
+        response['statusCode'] = 400
+
+    if response['statusCode'] != 200:
         logging.error('malformed event {}'.format(event))
-
-    result = {
-        'statusCode' : statusCode,
-        'headers' : {
-            'Content-Type' : 'application/json'
-        },
-        'body' : ''
-    }
-
-    return result
+        
+    return response
 

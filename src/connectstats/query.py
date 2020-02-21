@@ -26,20 +26,16 @@ class query:
         self.consumerKey = self.config['consumerKey']
         self.consumerSecret = self.config['consumerSecret']
 
-        self.verbose = True
-
     def setup_tokens(self,userAccessToken,userAccessTokenSecret):
         self.userAccessToken = userAccessToken
         self.userAccessTokenSecret = userAccessTokenSecret
-
         
     def id_generator(self, size=6, chars=string.ascii_uppercase + string.digits):
         return ''.join(random.choice(chars) for _ in range(size))
     
     def authentification_header(self, accessUrl ):
         if self.userAccessToken is None and not self.args.system:
-            if self.verbose:
-                print( '> No authentification' )
+            logging.info( '> No authentification' )
             return {}
         
         method = "GET"
@@ -57,8 +53,7 @@ class query:
         userAccessToken = self.userAccessToken
         userAccessTokenSecret = self.userAccessTokenSecret
         
-        if self.verbose:
-            print( '> User Authentication: {}'.format( self.userAccessToken ) )
+        logging.info( '> User Authentication: {}'.format( self.userAccessToken ) )
 
         oauth_params ={"oauth_consumer_key":self.consumerKey,
                        "oauth_token" :userAccessToken,
@@ -88,8 +83,7 @@ class query:
 
     def query_url(self, accessUrl ):
 
-        if self.verbose:
-            print( '> Request {}'.format( accessUrl ) )
+        logging.info( '> Request {}'.format( accessUrl ) )
         
         headers = self.authentification_header( accessUrl )
         pm = urllib3.PoolManager()
@@ -98,12 +92,10 @@ class query:
 
         if response.status == 200:
             contents = response.data
-            if self.verbose:
-                print( '> Received {} bytes'.format( len(contents) ) )
+            logging.info( '> Received {} bytes'.format( len(contents) ) )
         else:
             message = http.client.responses[response.status]
-            if self.verbose:
-                print( '> Error: {} {}'.format( response.status, message ) )
+            logging.error( '> Error: {} {}'.format( response.status, message ) )
             contents = message.encode( 'utf-8' )
             
         return( contents )

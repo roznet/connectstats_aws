@@ -9,7 +9,7 @@ import logging
 
 logging.getLogger().setLevel(logging.INFO)
 
-class resmgr:
+class resources_manager:
     def __init__(self,stage='local'):
         configfile = open( 'config.json', 'r' )
         self.fullconfig = json.load( configfile )
