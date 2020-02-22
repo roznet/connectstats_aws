@@ -187,13 +187,18 @@ class api:
         self.setup_access_token( row['userAccessToken'] )
 
         q.setup_tokens(self.userAccessToken,self.userAccessTokenSecret)
-        filecontent = q.query_url( row['callbackURL'] )
+        try:
+            filecontent = q.query_url( row['callbackURL'] )
+        except Exception as e:
+            logging.error( f'failed to download  file {row["callbackURL"]} with error {e}' )
+            filecontent = None
 
-        userId = row['userId']
-        fileType = row['fileType'].lower()
-        filename = f'users/{userId}/assets/{fileType}/{file_id}.{fileType}'
-        self.res.save_file(filename,filecontent)
-    
+        if filecontent:
+            userId = row['userId']
+            fileType = row['fileType'].lower()
+            filename = f'users/{userId}/assets/{fileType}/{file_id}.{fileType}'
+            self.res.save_file(filename,filecontent)
+
     def queue_task_push_or_ping(self,body):
         args = body['args']
         cache_id = args['cache_id']
@@ -220,7 +225,12 @@ class api:
         payload = json.loads( payload['json'] )
 
         if tag in payload:
-            items = payload[tag]
+            try:
+                items = payload[tag]
+            except Exception as e:
+                logging.error( f'Unable to extract items {tag} in {payload}' )
+                items = []
+                
             rows = []
             for item in items:
                 row = self.garmin_process_push_or_ping_item(item,table,table_key)
