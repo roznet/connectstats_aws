@@ -46,7 +46,7 @@ class resources_manager:
                 if url:
                     sqs = boto3.resource('sqs')
                     if sqs:
-                        logging.info( 'Connected sqs[{}] {}'.format( stage, sqs ) )
+                        logging.info( 'Connected sqs[{}] {}'.format( self.stage, sqs ) )
                         # Get the queue
                         self.queues[self.stage] = sqs.Queue(url)
             elif 'sqs_local_path' in self.config:
