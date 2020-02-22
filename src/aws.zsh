@@ -40,6 +40,7 @@ case $command in
 						echo "event={}" >> $testname
 				fi
 				echo "${name}.handler(event,{})" >> $testname
+
 				cat $testname | python3 
 				;;
 		createapi)

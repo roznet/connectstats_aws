@@ -29,8 +29,18 @@ class api:
             },
             'body' : ''
         }
-                
-    def save_to_cache(self,event,table):
+
+    def connectstats_status(self,event,args):
+        return {
+            'statusCode' : statusCode,
+            'headers' : {
+                'Content-Type' : 'application/json'
+            },
+            'body' : event
+        }
+
+    
+    def garmin_save_to_cache(self,event,table):
         if 'body' in event:
             body = event['body']
             query = 'INSERT INTO {} (`started_ts`,`json`) VALUES(FROM_UNIXTIME({}),%s)'.format( table, time.time() )
@@ -44,7 +54,7 @@ class api:
             
         self.res.commit()
         
-        if 'activities' in body or 'activityFiles' in body or 'manuallyUpdatedActivities' in body:
+        if 'activities' in body or 'activityFiles' in body or 'manuallyUpdatedActivities' in body or 'file' in body:
             message = { 'queue_task':'queue_task_push_or_ping',
                         'args':{'cache_id' : lastid, 'table' : table },
                         'stage':self.res.stage
@@ -198,6 +208,7 @@ class api:
             tag = 'activityFiles'
             table_key = 'file_id'
         else:
+            logging.error(f"don't know how to process table {cachetable}")
             return
         
         query = 'SELECT `json` FROM {} WHERE cache_id = {}'.format( cachetable, cache_id )
@@ -234,6 +245,8 @@ class api:
                                  'stage':self.res.stage
                     }
                     self.res.send_message(message)
+        else:
+            logging.error(f'Unable to find {tag} in message body')
 
     def process_queue_message(self,event,context):
         if 'Records' in event:
@@ -250,6 +263,12 @@ class api:
                         task = body['queue_task']
 
                         if task.startswith('queue_task_') and hasattr(self, task):
+                            logging.info( f'starting task {task}' )
                             getattr(self,task)( body )
                         else:
-                            logging.error('Unkonwn Commmand {}'.format(body))
+                            logging.error('Unknown Commmand {}'.format(body))
+                    else:
+                        logging.error(f'Missing queue_task {body}')
+                else:
+                    logging.error(f'missing body in {record}')
+                    
