@@ -21,9 +21,10 @@ def test_db():
 def test_url():
     status_url = os.environ['CS_ROZNET_STATUS_URL']
     pm = urllib3.PoolManager()
-    response =  pm.request('GET', status_url )
-
     logging.info( f'query {status_url}' )
+    response =  pm.request('GET', status_url )
+    logging.info( f'got response {response.status}' )
+
     return response
 
 def handler(event, context):

@@ -43,6 +43,9 @@ case $command in
 
 				cat $testname | python3 
 				;;
+		invoke)
+				$aws_cmd lambda invoke --function-name ${name} out/${name}.json
+				;;
 		createapi)
 				aws apigateway get-rest-apis > out/rest_apis.json
 				api_id=`jq -j '.items[] | select(.name=="connectstats") | .id' out/rest_apis.json`
